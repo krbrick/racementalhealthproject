@@ -1,0 +1,1234 @@
+---
+title: "CPP593Brick"
+author: "Karabrick"
+date: '2022-06-28'
+output: html_document
+  flexdashboard::flex_dashboard:
+    theme: bootstrap
+    source: embed
+    smart: false
+runtime: shiny
+---
+
+
+```{r, echo=FALSE}
+library( geojsonio )   # read shapefiles
+library( sp )          # work with shapefiles
+library( sf )          # work with shapefiles - simple features format
+library( mclust )      # cluster analysis 
+library( tmap )        # theme maps
+library( ggplot2 )     # graphing 
+library( ggthemes )    # nice formats for ggplots
+library( dplyr )       # data wrangling 
+library( pander )      # formatting RMD tables
+library(corrplot)     #correlation plots
+library( cartogram )  # spatial maps w/ tract size bias reduction
+library( maptools )   # spatial object manipulation 
+library( tidycensus ) #get data
+library( tigris )   #get data
+library(rgdal)      #shapefiles
+library( flexdashboard ) #dashboard
+library( shiny )
+library( rsconnect )    #rmarkdown to shiny
+library( DT )   #datatables
+library( pander )   #pander
+library( stargazer ) #regression tables
+library( ggmap ) #maps
+library( leaflet ) #maps
+library( viridis )  # scale fill functions
+library( pals ) #colors
+```
+```{r, include=FALSE }
+options(tigris_use_cache = TRUE)
+options(tigris_class = "sf")
+Sys.setenv(CENSUS_KEY= "101b48083a014d979387fab497e581ba4d68ff98")
+```
+
+```{r, echo=FALSE}
+# For geospatial data and mapping
+crosswalk <- read.csv( "https://raw.githubusercontent.com/DS4PS/cpp-529-master/master/data/cbsatocountycrosswalk.csv",  stringsAsFactors=F, colClasses="character" )
+```
+
+```{r,include=FALSE}
+#finding boston fips
+grep( "^BOSTON", crosswalk$msaname, value=TRUE )
+these.bos <- crosswalk$msaname == "BOSTON-WORCESTER-LAWRENCE-LOWELL-BROCKTON, MA"
+these.bos.fips <- crosswalk$fipscounty[ these.bos ]
+these.bos.fips <- na.omit( these.bos.fips )
+#finding connecticut fips
+grep( "^CONNE", crosswalk$msaname, value=TRUE )
+these.conn <- crosswalk$msaname == "CONNECTICUT"
+these.conn.fips <- crosswalk$fipscounty[ these.conn ]
+these.conn.fips <- na.omit(these.conn.fips)
+#finding NY fips
+grep( "^NEW YORK", crosswalk$msaname, value=TRUE )
+these.nyc <- crosswalk$msaname == "NEW YORK-NEWARK, NY-NJ-PA"
+these.nyc.fips <- crosswalk$fipscounty[ these.nyc ]
+these.nyc.fips <- na.omit(these.nyc.fips)
+
+these.ny <- crosswalk$msaname == "NEW YORK"
+these.ny.fips <- crosswalk$fipscounty[ these.ny ]
+these.ny.fips <- na.omit(these.ny.fips)
+
+grep( "^PENN", crosswalk$msaname, value=TRUE )
+these.penn <- crosswalk$msaname == "PENNSYLVANIA"
+these.penn.fips <- crosswalk$fipscounty[ these.penn ]
+these.penn.fips <- na.omit(these.penn.fips)
+
+grep( "^VERMONT", crosswalk$msaname, value=TRUE )
+these.VER <- crosswalk$msaname == "VERMONT"
+these.VER.fips <- crosswalk$fipscounty[ these.VER ]
+these.VER.fips <- na.omit(these.VER.fips)
+
+grep( "^MAINE", crosswalk$msaname, value=TRUE )
+these.MAINE <- crosswalk$msaname == "MAINE"
+these.MAINE.fips <- crosswalk$fipscounty[ these.MAINE ]
+these.MAINE.fips <- na.omit(these.MAINE.fips)
+
+grep( "^NEW HAMPSHIRE", crosswalk$msaname, value=TRUE )
+these.NH <- crosswalk$msaname == "NEW HAMPSHIRE"
+these.NH.fips <- crosswalk$fipscounty[ these.NH ]
+these.NH.fips <- na.omit(these.NH.fips)
+
+these.fips <- (c(these.bos.fips,these.ny.fips,these.conn.fips, these.nyc.fips,these.penn.fips, these.VER.fips, these.MAINE.fips, these.NH.fips))
+
+```
+
+```{r,include=FALSE}
+state.fips <- substr( these.fips, 1, 2 )
+county.fips <- substr( these.fips, 3, 5 )
+cbind( these.fips, state.fips, county.fips )
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+bos.pop <-
+get_acs( geography = "county", variables = "B01003_001",
+         state = "25", county = county.fips[state.fips=="25"], geometry = TRUE ) %>% 
+         select( GEOID, estimate ) %>%
+         rename( POP=estimate )
+
+conn.pop <-
+get_acs( geography = "county", variables = "B01003_001",
+         state = "09", county = county.fips[state.fips=="09"], geometry = TRUE ) %>% 
+         select( GEOID, estimate ) %>%
+         rename( POP=estimate )
+ny.pop <-
+get_acs( geography = "county", variables = "B01003_001",
+         state = "36", county = county.fips[state.fips=="36"], geometry = TRUE ) %>% 
+         select( GEOID, estimate ) %>%
+         rename( POP=estimate )
+
+PENN.pop <-
+get_acs( geography = "county", variables = "B01003_001",
+         state = "42", county = county.fips[state.fips=="42"], geometry = TRUE ) %>% 
+         select( GEOID, estimate ) %>%
+         rename( POP=estimate )
+
+VER.pop <-
+get_acs( geography = "county", variables = "B01003_001",
+         state = "50", county = county.fips[state.fips=="50"], geometry = TRUE ) %>% 
+         select( GEOID, estimate ) %>%
+         rename( POP=estimate )
+
+MAINE.pop <-
+get_acs( geography = "county", variables = "B01003_001",
+         state = "23", county = county.fips[state.fips=="23"], geometry = TRUE ) %>% 
+         select( GEOID, estimate ) %>%
+         rename( POP=estimate )
+
+NH.pop <-
+get_acs( geography = "county", variables = "B01003_001",
+         state = "33", county = county.fips[state.fips=="33"], geometry = TRUE ) %>% 
+         select( GEOID, estimate ) %>%
+         rename( POP=estimate )
+# get a census county shapefile
+#
+all.pops <- do.call(rbind, list(bos.pop, conn.pop, ny.pop,PENN.pop,VER.pop,MAINE.pop,NH.pop))
+
+```
+## Mass info from census data
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+##Files downloaded from https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/
+
+header_file_path.ma <- "/Users/karabrick/Desktop/CPP 593/mageo2020.pl"
+part1_file_path.ma  <- "Desktop/CPP 593/ma000012020.pl"
+part2_file_path.ma  <- "Desktop/CPP 593/ma000022020.pl"
+part3_file_path.ma  <- "Desktop/CPP 593/ma000032020.pl"
+
+# -----------------------------
+# Import the data
+# -----------------------------
+header.ma <- read.delim(header_file_path.ma, header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE )
+part1.ma  <- read.delim(part1_file_path.ma,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part2.ma  <- read.delim(part2_file_path.ma,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part3.ma  <- read.delim(part3_file_path.ma,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# For demographic data
+
+#column names provided by https://www2.census.gov/programs-surveys/decennial/rdo/about/2020-census-program/Phase3/SupportMaterials/2020PL_R_import_scripts.zip
+              colnames(header.ma) <- c("FILEID", "STUSAB", "SUMLEV", "GEOVAR",
+                                    "GEOCOMP", "CHARITER", "CIFSN", "LOGRECNO", 
+                                    "GEOID", "GEOCODE", "REGION", "DIVISION",
+                                    "STATE", "STATENS", "COUNTY", "COUNTYCC", 
+                                    "COUNTYNS", "COUSUB", "COUSUBCC", "COUSUBNS",
+                                    "SUBMCD", "SUBMCDCC", "SUBMCDNS", "ESTATE", 
+                                    "ESTATECC", "ESTATENS", "CONCIT", "CONCITCC",
+                                    "CONCITNS", "PLACE", "PLACECC", "PLACENS", 
+                                    "TRACT", "BLKGRP", "BLOCK", "AIANHH",
+                                    "AIHHTLI", "AIANHHFP", "AIANHHCC", "AIANHHNS", 
+                                    "AITS", "AITSFP", "AITSCC", "AITSNS","TTRACT", 
+                                    "TBLKGRP", "ANRC", "ANRCCC", "ANRCNS", "CBSA", 
+                                    "MEMI", "CSA", "METDIV", "NECTA",
+                                    "NMEMI", "CNECTA", "NECTADIV", "CBSAPCI", 
+                                    "NECTAPCI", "UA", "UATYPE", "UR", "CD116",
+                                    "CD118","CD119", "CD120", "CD121", "SLDU18",
+                                    "SLDU22", "SLDU24", "SLDU26", "SLDU28", 
+                                    "SLDL18", "SLDL22","SLDL24", "SLDL26", 
+                                    "SLDL28", "VTD", "VTDI", "ZCTA", "SDELM", 
+                                    "SDSEC", "SDUNI", "PUMA", "AREALAND", "AREAWATR",
+                                    "BASENAME", "NAME", "FUNCSTAT", "GCUNI",
+                                    "POP100", "HU100", "INTPTLAT", "INTPTLON",
+                                    "LSADC", "PARTFLAG", "UGA")
+
+colnames(part1.ma) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO", 
+                     paste0("P00", c(10001:10071, 20001:20073)))
+
+colnames(part2.ma) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO", 
+                     paste0("P00", c(30001:30071, 40001:40073)), 
+                     paste0("H00", 10001:10003))
+
+colnames(part3.ma) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO",
+                     paste0("P00", 50001:50010))
+
+combine.ma <- Reduce(function(x,y) {merge(x, y, by=c("LOGRECNO", "STUSAB", "FILEID", "CHARITER"))}, list(header.ma[,-7], part1.ma[,-4], part2.ma[,-4], part3.ma))
+combine.ma <- combine.ma[order(combine.ma$LOGRECNO), c("FILEID", "STUSAB", "SUMLEV", "GEOVAR", 
+                                              "GEOCOMP", "CHARITER", "CIFSN", "LOGRECNO", 
+                                              "GEOID", "GEOCODE", "REGION", "DIVISION", 
+                                              "STATE", "STATENS", "COUNTY", "COUNTYCC",
+                                              "COUNTYNS", "COUSUB","COUSUBCC", "COUSUBNS",
+                                              "SUBMCD", "SUBMCDCC", "SUBMCDNS", "ESTATE",
+                                              "ESTATECC", "ESTATENS", "CONCIT", "CONCITCC",
+                                              "CONCITNS", "PLACE", "PLACECC", "PLACENS", 
+                                              "TRACT", "BLKGRP", "BLOCK", "AIANHH", "AIHHTLI",
+                                              "AIANHHFP", "AIANHHCC", "AIANHHNS", "AITS",
+                                              "AITSFP", "AITSCC", "AITSNS","TTRACT",
+                                              "TBLKGRP", "ANRC", "ANRCCC", "ANRCNS", "CBSA",
+                                              "MEMI", "CSA", "METDIV", "NECTA",
+                                              "NMEMI", "CNECTA", "NECTADIV", "CBSAPCI",
+                                              "NECTAPCI", "UA", "UATYPE", "UR", "CD116", "CD118",
+                                              "CD119", "CD120", "CD121", "SLDU18", "SLDU22",
+                                              "SLDU24", "SLDU26", "SLDU28", "SLDL18", "SLDL22",
+                                              "SLDL24", "SLDL26", "SLDL28", "VTD", "VTDI", "ZCTA",
+                                              "SDELM", "SDSEC", "SDUNI", "PUMA", "AREALAND",
+                                              "AREAWATR", "BASENAME", "NAME", "FUNCSTAT", "GCUNI",
+                                              "POP100", "HU100", "INTPTLAT", "INTPTLON", 
+                                              "LSADC", "PARTFLAG", "UGA", 
+                                              paste0("P00",c(10001:10071, 20001:20073)),
+                                              paste0("P00",c(30001:30071, 40001:40073)), 
+                                              paste0("H00", 10001:10003), 
+                                              paste0("P00", 50001:50010))]
+rownames(combine.ma) <- 1:nrow(combine.ma)
+```
+
+#Vermont info from census data
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+##Files downloaded from https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/
+
+header_file_path.vt <- "/Users/karabrick/Desktop/CPP 593/vtgeo2020.pl"
+part1_file_path.vt  <- "Desktop/CPP 593/vt000012020.pl"
+part2_file_path.vt  <- "Desktop/CPP 593/vt000022020.pl"
+part3_file_path.vt  <- "Desktop/CPP 593/vt000032020.pl"
+
+# -----------------------------
+# Import the data
+# -----------------------------
+header.vt <- read.delim(header_file_path.vt, header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part1.vt  <- read.delim(part1_file_path.vt,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part2.vt  <- read.delim(part2_file_path.vt,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part3.vt  <- read.delim(part3_file_path.vt,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+```
+ 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# For demographic data
+
+#column names provided by https://www2.census.gov/programs-surveys/decennial/rdo/about/2020-census-program/Phase3/SupportMaterials/2020PL_R_import_scripts.zip
+              colnames(header.vt) <- c("FILEID", "STUSAB", "SUMLEV", "GEOVAR",
+                                    "GEOCOMP", "CHARITER", "CIFSN", "LOGRECNO", 
+                                    "GEOID", "GEOCODE", "REGION", "DIVISION",
+                                    "STATE", "STATENS", "COUNTY", "COUNTYCC", 
+                                    "COUNTYNS", "COUSUB", "COUSUBCC", "COUSUBNS",
+                                    "SUBMCD", "SUBMCDCC", "SUBMCDNS", "ESTATE", 
+                                    "ESTATECC", "ESTATENS", "CONCIT", "CONCITCC",
+                                    "CONCITNS", "PLACE", "PLACECC", "PLACENS", 
+                                    "TRACT", "BLKGRP", "BLOCK", "AIANHH",
+                                    "AIHHTLI", "AIANHHFP", "AIANHHCC", "AIANHHNS", 
+                                    "AITS", "AITSFP", "AITSCC", "AITSNS","TTRACT", 
+                                    "TBLKGRP", "ANRC", "ANRCCC", "ANRCNS", "CBSA", 
+                                    "MEMI", "CSA", "METDIV", "NECTA",
+                                    "NMEMI", "CNECTA", "NECTADIV", "CBSAPCI", 
+                                    "NECTAPCI", "UA", "UATYPE", "UR", "CD116",
+                                    "CD118","CD119", "CD120", "CD121", "SLDU18",
+                                    "SLDU22", "SLDU24", "SLDU26", "SLDU28", 
+                                    "SLDL18", "SLDL22","SLDL24", "SLDL26", 
+                                    "SLDL28", "VTD", "VTDI", "ZCTA", "SDELM", 
+                                    "SDSEC", "SDUNI", "PUMA", "AREALAND", "AREAWATR",
+                                    "BASENAME", "NAME", "FUNCSTAT", "GCUNI",
+                                    "POP100", "HU100", "INTPTLAT", "INTPTLON",
+                                    "LSADC", "PARTFLAG", "UGA")
+
+colnames(part1.vt) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO", 
+                     paste0("P00", c(10001:10071, 20001:20073)))
+
+colnames(part2.vt) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO", 
+                     paste0("P00", c(30001:30071, 40001:40073)), 
+                     paste0("H00", 10001:10003))
+
+colnames(part3.vt) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO",
+                     paste0("P00", 50001:50010))
+
+combine.vt <- Reduce(function(x,y) {merge(x, y, by=c("LOGRECNO", "STUSAB", "FILEID", "CHARITER"))}, list(header.vt[,-7], part1.vt[,-4], part2.vt[,-4], part3.vt))
+combine.vt <- combine.vt[order(combine.vt$LOGRECNO), c("FILEID", "STUSAB", "SUMLEV", "GEOVAR", 
+                                              "GEOCOMP", "CHARITER", "CIFSN", "LOGRECNO", 
+                                              "GEOID", "GEOCODE", "REGION", "DIVISION", 
+                                              "STATE", "STATENS", "COUNTY", "COUNTYCC",
+                                              "COUNTYNS", "COUSUB","COUSUBCC", "COUSUBNS",
+                                              "SUBMCD", "SUBMCDCC", "SUBMCDNS", "ESTATE",
+                                              "ESTATECC", "ESTATENS", "CONCIT", "CONCITCC",
+                                              "CONCITNS", "PLACE", "PLACECC", "PLACENS", 
+                                              "TRACT", "BLKGRP", "BLOCK", "AIANHH", "AIHHTLI",
+                                              "AIANHHFP", "AIANHHCC", "AIANHHNS", "AITS",
+                                              "AITSFP", "AITSCC", "AITSNS","TTRACT",
+                                              "TBLKGRP", "ANRC", "ANRCCC", "ANRCNS", "CBSA",
+                                              "MEMI", "CSA", "METDIV", "NECTA",
+                                              "NMEMI", "CNECTA", "NECTADIV", "CBSAPCI",
+                                              "NECTAPCI", "UA", "UATYPE", "UR", "CD116", "CD118",
+                                              "CD119", "CD120", "CD121", "SLDU18", "SLDU22",
+                                              "SLDU24", "SLDU26", "SLDU28", "SLDL18", "SLDL22",
+                                              "SLDL24", "SLDL26", "SLDL28", "VTD", "VTDI", "ZCTA",
+                                              "SDELM", "SDSEC", "SDUNI", "PUMA", "AREALAND",
+                                              "AREAWATR", "BASENAME", "NAME", "FUNCSTAT", "GCUNI",
+                                              "POP100", "HU100", "INTPTLAT", "INTPTLON", 
+                                              "LSADC", "PARTFLAG", "UGA", 
+                                              paste0("P00",c(10001:10071, 20001:20073)),
+                                              paste0("P00",c(30001:30071, 40001:40073)), 
+                                              paste0("H00", 10001:10003), 
+                                              paste0("P00", 50001:50010))]
+rownames(combine.vt) <- 1:nrow(combine.vt)
+```
+
+## Penn info from census data
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+##Files downloaded from https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/
+
+header_file_path.pa <- "/Users/karabrick/Desktop/CPP 593/pageo2020.pl"
+part1_file_path.pa  <- "Desktop/CPP 593/pa000012020.pl"
+part2_file_path.pa  <- "Desktop/CPP 593/pa000022020.pl"
+part3_file_path.pa  <- "Desktop/CPP 593/pa000032020.pl"
+
+# -----------------------------
+# Import the data
+# -----------------------------
+header.pa <- read.delim(header_file_path.pa, header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part1.pa  <- read.delim(part1_file_path.pa,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part2.pa  <- read.delim(part2_file_path.pa,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part3.pa  <- read.delim(part3_file_path.pa,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+```
+ 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# For demographic data
+
+#column names provided by https://www2.census.gov/programs-surveys/decennial/rdo/about/2020-census-program/Phase3/SupportMaterials/2020PL_R_import_scripts.zip
+              colnames(header.pa) <- c("FILEID", "STUSAB", "SUMLEV", "GEOVAR",
+                                    "GEOCOMP", "CHARITER", "CIFSN", "LOGRECNO", 
+                                    "GEOID", "GEOCODE", "REGION", "DIVISION",
+                                    "STATE", "STATENS", "COUNTY", "COUNTYCC", 
+                                    "COUNTYNS", "COUSUB", "COUSUBCC", "COUSUBNS",
+                                    "SUBMCD", "SUBMCDCC", "SUBMCDNS", "ESTATE", 
+                                    "ESTATECC", "ESTATENS", "CONCIT", "CONCITCC",
+                                    "CONCITNS", "PLACE", "PLACECC", "PLACENS", 
+                                    "TRACT", "BLKGRP", "BLOCK", "AIANHH",
+                                    "AIHHTLI", "AIANHHFP", "AIANHHCC", "AIANHHNS", 
+                                    "AITS", "AITSFP", "AITSCC", "AITSNS","TTRACT", 
+                                    "TBLKGRP", "ANRC", "ANRCCC", "ANRCNS", "CBSA", 
+                                    "MEMI", "CSA", "METDIV", "NECTA",
+                                    "NMEMI", "CNECTA", "NECTADIV", "CBSAPCI", 
+                                    "NECTAPCI", "UA", "UATYPE", "UR", "CD116",
+                                    "CD118","CD119", "CD120", "CD121", "SLDU18",
+                                    "SLDU22", "SLDU24", "SLDU26", "SLDU28", 
+                                    "SLDL18", "SLDL22","SLDL24", "SLDL26", 
+                                    "SLDL28", "VTD", "VTDI", "ZCTA", "SDELM", 
+                                    "SDSEC", "SDUNI", "PUMA", "AREALAND", "AREAWATR",
+                                    "BASENAME", "NAME", "FUNCSTAT", "GCUNI",
+                                    "POP100", "HU100", "INTPTLAT", "INTPTLON",
+                                    "LSADC", "PARTFLAG", "UGA")
+
+colnames(part1.pa) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO", 
+                     paste0("P00", c(10001:10071, 20001:20073)))
+
+colnames(part2.pa) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO", 
+                     paste0("P00", c(30001:30071, 40001:40073)), 
+                     paste0("H00", 10001:10003))
+
+colnames(part3.pa) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO",
+                     paste0("P00", 50001:50010))
+
+combine.pa <- Reduce(function(x,y) {merge(x, y, by=c("LOGRECNO", "STUSAB", "FILEID", "CHARITER"))}, list(header.pa[,-7], part1.pa[,-4], part2.pa[,-4], part3.pa))
+combine.pa <- combine.pa[order(combine.pa$LOGRECNO), c("FILEID", "STUSAB", "SUMLEV", "GEOVAR", 
+                                              "GEOCOMP", "CHARITER", "CIFSN", "LOGRECNO", 
+                                              "GEOID", "GEOCODE", "REGION", "DIVISION", 
+                                              "STATE", "STATENS", "COUNTY", "COUNTYCC",
+                                              "COUNTYNS", "COUSUB","COUSUBCC", "COUSUBNS",
+                                              "SUBMCD", "SUBMCDCC", "SUBMCDNS", "ESTATE",
+                                              "ESTATECC", "ESTATENS", "CONCIT", "CONCITCC",
+                                              "CONCITNS", "PLACE", "PLACECC", "PLACENS", 
+                                              "TRACT", "BLKGRP", "BLOCK", "AIANHH", "AIHHTLI",
+                                              "AIANHHFP", "AIANHHCC", "AIANHHNS", "AITS",
+                                              "AITSFP", "AITSCC", "AITSNS","TTRACT",
+                                              "TBLKGRP", "ANRC", "ANRCCC", "ANRCNS", "CBSA",
+                                              "MEMI", "CSA", "METDIV", "NECTA",
+                                              "NMEMI", "CNECTA", "NECTADIV", "CBSAPCI",
+                                              "NECTAPCI", "UA", "UATYPE", "UR", "CD116", "CD118",
+                                              "CD119", "CD120", "CD121", "SLDU18", "SLDU22",
+                                              "SLDU24", "SLDU26", "SLDU28", "SLDL18", "SLDL22",
+                                              "SLDL24", "SLDL26", "SLDL28", "VTD", "VTDI", "ZCTA",
+                                              "SDELM", "SDSEC", "SDUNI", "PUMA", "AREALAND",
+                                              "AREAWATR", "BASENAME", "NAME", "FUNCSTAT", "GCUNI",
+                                              "POP100", "HU100", "INTPTLAT", "INTPTLON", 
+                                              "LSADC", "PARTFLAG", "UGA", 
+                                              paste0("P00",c(10001:10071, 20001:20073)),
+                                              paste0("P00",c(30001:30071, 40001:40073)), 
+                                              paste0("H00", 10001:10003), 
+                                              paste0("P00", 50001:50010))]
+rownames(combine.pa) <- 1:nrow(combine.pa)
+```
+
+## NY info from census data
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+##Files downloaded from https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/
+
+header_file_path.ny <- "/Users/karabrick/Desktop/CPP 593/nygeo2020.pl"
+part1_file_path.ny  <- "Desktop/CPP 593/ny000012020.pl"
+part2_file_path.ny  <- "Desktop/CPP 593/ny000022020.pl"
+part3_file_path.ny  <- "Desktop/CPP 593/ny000032020.pl"
+
+# -----------------------------
+# Import the data
+# -----------------------------
+header.ny <- read.delim(header_file_path.ny, header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part1.ny  <- read.delim(part1_file_path.ny,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part2.ny  <- read.delim(part2_file_path.ny,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part3.ny  <- read.delim(part3_file_path.ny,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+```
+ 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# For demographic data
+
+#column names provided by https://www2.census.gov/programs-surveys/decennial/rdo/about/2020-census-program/Phase3/SupportMaterials/2020PL_R_import_scripts.zip
+              colnames(header.ny) <- c("FILEID", "STUSAB", "SUMLEV", "GEOVAR",
+                                    "GEOCOMP", "CHARITER", "CIFSN", "LOGRECNO", 
+                                    "GEOID", "GEOCODE", "REGION", "DIVISION",
+                                    "STATE", "STATENS", "COUNTY", "COUNTYCC", 
+                                    "COUNTYNS", "COUSUB", "COUSUBCC", "COUSUBNS",
+                                    "SUBMCD", "SUBMCDCC", "SUBMCDNS", "ESTATE", 
+                                    "ESTATECC", "ESTATENS", "CONCIT", "CONCITCC",
+                                    "CONCITNS", "PLACE", "PLACECC", "PLACENS", 
+                                    "TRACT", "BLKGRP", "BLOCK", "AIANHH",
+                                    "AIHHTLI", "AIANHHFP", "AIANHHCC", "AIANHHNS", 
+                                    "AITS", "AITSFP", "AITSCC", "AITSNS","TTRACT", 
+                                    "TBLKGRP", "ANRC", "ANRCCC", "ANRCNS", "CBSA", 
+                                    "MEMI", "CSA", "METDIV", "NECTA",
+                                    "NMEMI", "CNECTA", "NECTADIV", "CBSAPCI", 
+                                    "NECTAPCI", "UA", "UATYPE", "UR", "CD116",
+                                    "CD118","CD119", "CD120", "CD121", "SLDU18",
+                                    "SLDU22", "SLDU24", "SLDU26", "SLDU28", 
+                                    "SLDL18", "SLDL22","SLDL24", "SLDL26", 
+                                    "SLDL28", "VTD", "VTDI", "ZCTA", "SDELM", 
+                                    "SDSEC", "SDUNI", "PUMA", "AREALAND", "AREAWATR",
+                                    "BASENAME", "NAME", "FUNCSTAT", "GCUNI",
+                                    "POP100", "HU100", "INTPTLAT", "INTPTLON",
+                                    "LSADC", "PARTFLAG", "UGA")
+
+colnames(part1.ny) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO", 
+                     paste0("P00", c(10001:10071, 20001:20073)))
+
+colnames(part2.ny) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO", 
+                     paste0("P00", c(30001:30071, 40001:40073)), 
+                     paste0("H00", 10001:10003))
+
+colnames(part3.ny) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO",
+                     paste0("P00", 50001:50010))
+
+combine.ny <- Reduce(function(x,y) {merge(x, y, by=c("LOGRECNO", "STUSAB", "FILEID", "CHARITER"))}, list(header.ny[,-7], part1.ny[,-4], part2.ny[,-4], part3.ny))
+combine.ny <- combine.ny[order(combine.ny$LOGRECNO), c("FILEID", "STUSAB", "SUMLEV", "GEOVAR", 
+                                              "GEOCOMP", "CHARITER", "CIFSN", "LOGRECNO", 
+                                              "GEOID", "GEOCODE", "REGION", "DIVISION", 
+                                              "STATE", "STATENS", "COUNTY", "COUNTYCC",
+                                              "COUNTYNS", "COUSUB","COUSUBCC", "COUSUBNS",
+                                              "SUBMCD", "SUBMCDCC", "SUBMCDNS", "ESTATE",
+                                              "ESTATECC", "ESTATENS", "CONCIT", "CONCITCC",
+                                              "CONCITNS", "PLACE", "PLACECC", "PLACENS", 
+                                              "TRACT", "BLKGRP", "BLOCK", "AIANHH", "AIHHTLI",
+                                              "AIANHHFP", "AIANHHCC", "AIANHHNS", "AITS",
+                                              "AITSFP", "AITSCC", "AITSNS","TTRACT",
+                                              "TBLKGRP", "ANRC", "ANRCCC", "ANRCNS", "CBSA",
+                                              "MEMI", "CSA", "METDIV", "NECTA",
+                                              "NMEMI", "CNECTA", "NECTADIV", "CBSAPCI",
+                                              "NECTAPCI", "UA", "UATYPE", "UR", "CD116", "CD118",
+                                              "CD119", "CD120", "CD121", "SLDU18", "SLDU22",
+                                              "SLDU24", "SLDU26", "SLDU28", "SLDL18", "SLDL22",
+                                              "SLDL24", "SLDL26", "SLDL28", "VTD", "VTDI", "ZCTA",
+                                              "SDELM", "SDSEC", "SDUNI", "PUMA", "AREALAND",
+                                              "AREAWATR", "BASENAME", "NAME", "FUNCSTAT", "GCUNI",
+                                              "POP100", "HU100", "INTPTLAT", "INTPTLON", 
+                                              "LSADC", "PARTFLAG", "UGA", 
+                                              paste0("P00",c(10001:10071, 20001:20073)),
+                                              paste0("P00",c(30001:30071, 40001:40073)), 
+                                              paste0("H00", 10001:10003), 
+                                              paste0("P00", 50001:50010))]
+rownames(combine.ny) <- 1:nrow(combine.ny)
+```
+
+## NH info from census data
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+##Files downloaded from https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/
+
+header_file_path.nh <- "/Users/karabrick/Desktop/CPP 593/nhgeo2020.pl"
+part1_file_path.nh  <- "Desktop/CPP 593/nh000012020.pl"
+part2_file_path.nh  <- "Desktop/CPP 593/nh000022020.pl"
+part3_file_path.nh  <- "Desktop/CPP 593/nh000032020.pl"
+
+# -----------------------------
+# Import the data
+# -----------------------------
+header.nh <- read.delim(header_file_path.nh, header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part1.nh  <- read.delim(part1_file_path.nh,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part2.nh  <- read.delim(part2_file_path.nh,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part3.nh  <- read.delim(part3_file_path.nh,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+```
+ 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# For demographic data
+
+#column names provided by https://www2.census.gov/programs-surveys/decennial/rdo/about/2020-census-program/Phase3/SupportMaterials/2020PL_R_import_scripts.zip
+              colnames(header.nh) <- c("FILEID", "STUSAB", "SUMLEV", "GEOVAR",
+                                    "GEOCOMP", "CHARITER", "CIFSN", "LOGRECNO", 
+                                    "GEOID", "GEOCODE", "REGION", "DIVISION",
+                                    "STATE", "STATENS", "COUNTY", "COUNTYCC", 
+                                    "COUNTYNS", "COUSUB", "COUSUBCC", "COUSUBNS",
+                                    "SUBMCD", "SUBMCDCC", "SUBMCDNS", "ESTATE", 
+                                    "ESTATECC", "ESTATENS", "CONCIT", "CONCITCC",
+                                    "CONCITNS", "PLACE", "PLACECC", "PLACENS", 
+                                    "TRACT", "BLKGRP", "BLOCK", "AIANHH",
+                                    "AIHHTLI", "AIANHHFP", "AIANHHCC", "AIANHHNS", 
+                                    "AITS", "AITSFP", "AITSCC", "AITSNS","TTRACT", 
+                                    "TBLKGRP", "ANRC", "ANRCCC", "ANRCNS", "CBSA", 
+                                    "MEMI", "CSA", "METDIV", "NECTA",
+                                    "NMEMI", "CNECTA", "NECTADIV", "CBSAPCI", 
+                                    "NECTAPCI", "UA", "UATYPE", "UR", "CD116",
+                                    "CD118","CD119", "CD120", "CD121", "SLDU18",
+                                    "SLDU22", "SLDU24", "SLDU26", "SLDU28", 
+                                    "SLDL18", "SLDL22","SLDL24", "SLDL26", 
+                                    "SLDL28", "VTD", "VTDI", "ZCTA", "SDELM", 
+                                    "SDSEC", "SDUNI", "PUMA", "AREALAND", "AREAWATR",
+                                    "BASENAME", "NAME", "FUNCSTAT", "GCUNI",
+                                    "POP100", "HU100", "INTPTLAT", "INTPTLON",
+                                    "LSADC", "PARTFLAG", "UGA")
+
+colnames(part1.nh) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO", 
+                     paste0("P00", c(10001:10071, 20001:20073)))
+
+colnames(part2.nh) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO", 
+                     paste0("P00", c(30001:30071, 40001:40073)), 
+                     paste0("H00", 10001:10003))
+
+colnames(part3.nh) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO",
+                     paste0("P00", 50001:50010))
+
+combine.nh <- Reduce(function(x,y) {merge(x, y, by=c("LOGRECNO", "STUSAB", "FILEID", "CHARITER"))}, list(header.nh[,-7], part1.nh[,-4], part2.nh[,-4], part3.nh))
+combine.nh <- combine.nh[order(combine.nh$LOGRECNO), c("FILEID", "STUSAB", "SUMLEV", "GEOVAR", 
+                                              "GEOCOMP", "CHARITER", "CIFSN", "LOGRECNO", 
+                                              "GEOID", "GEOCODE", "REGION", "DIVISION", 
+                                              "STATE", "STATENS", "COUNTY", "COUNTYCC",
+                                              "COUNTYNS", "COUSUB","COUSUBCC", "COUSUBNS",
+                                              "SUBMCD", "SUBMCDCC", "SUBMCDNS", "ESTATE",
+                                              "ESTATECC", "ESTATENS", "CONCIT", "CONCITCC",
+                                              "CONCITNS", "PLACE", "PLACECC", "PLACENS", 
+                                              "TRACT", "BLKGRP", "BLOCK", "AIANHH", "AIHHTLI",
+                                              "AIANHHFP", "AIANHHCC", "AIANHHNS", "AITS",
+                                              "AITSFP", "AITSCC", "AITSNS","TTRACT",
+                                              "TBLKGRP", "ANRC", "ANRCCC", "ANRCNS", "CBSA",
+                                              "MEMI", "CSA", "METDIV", "NECTA",
+                                              "NMEMI", "CNECTA", "NECTADIV", "CBSAPCI",
+                                              "NECTAPCI", "UA", "UATYPE", "UR", "CD116", "CD118",
+                                              "CD119", "CD120", "CD121", "SLDU18", "SLDU22",
+                                              "SLDU24", "SLDU26", "SLDU28", "SLDL18", "SLDL22",
+                                              "SLDL24", "SLDL26", "SLDL28", "VTD", "VTDI", "ZCTA",
+                                              "SDELM", "SDSEC", "SDUNI", "PUMA", "AREALAND",
+                                              "AREAWATR", "BASENAME", "NAME", "FUNCSTAT", "GCUNI",
+                                              "POP100", "HU100", "INTPTLAT", "INTPTLON", 
+                                              "LSADC", "PARTFLAG", "UGA", 
+                                              paste0("P00",c(10001:10071, 20001:20073)),
+                                              paste0("P00",c(30001:30071, 40001:40073)), 
+                                              paste0("H00", 10001:10003), 
+                                              paste0("P00", 50001:50010))]
+rownames(combine.nh) <- 1:nrow(combine.nh)
+```
+
+## CT info from census data
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+##Files downloaded from https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/
+
+header_file_path.ct <- "/Users/karabrick/Desktop/CPP 593/ctgeo2020.pl"
+part1_file_path.ct  <- "Desktop/CPP 593/ct000012020.pl"
+part2_file_path.ct  <- "Desktop/CPP 593/ct000022020.pl"
+part3_file_path.ct  <- "Desktop/CPP 593/ct000032020.pl"
+
+# -----------------------------
+# Import the data
+# -----------------------------
+header.ct <- read.delim(header_file_path.ct, header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part1.ct  <- read.delim(part1_file_path.ct,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part2.ct  <- read.delim(part2_file_path.ct,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+part3.ct  <- read.delim(part3_file_path.ct,  header=FALSE, colClasses="character", sep="|", stringsAsFactors = FALSE)
+```
+ 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# For demographic data
+
+#column names provided by https://www2.census.gov/programs-surveys/decennial/rdo/about/2020-census-program/Phase3/SupportMaterials/2020PL_R_import_scripts.zip
+              colnames(header.ct) <- c("FILEID", "STUSAB", "SUMLEV", "GEOVAR",
+                                    "GEOCOMP", "CHARITER", "CIFSN", "LOGRECNO", 
+                                    "GEOID", "GEOCODE", "REGION", "DIVISION",
+                                    "STATE", "STATENS", "COUNTY", "COUNTYCC", 
+                                    "COUNTYNS", "COUSUB", "COUSUBCC", "COUSUBNS",
+                                    "SUBMCD", "SUBMCDCC", "SUBMCDNS", "ESTATE", 
+                                    "ESTATECC", "ESTATENS", "CONCIT", "CONCITCC",
+                                    "CONCITNS", "PLACE", "PLACECC", "PLACENS", 
+                                    "TRACT", "BLKGRP", "BLOCK", "AIANHH",
+                                    "AIHHTLI", "AIANHHFP", "AIANHHCC", "AIANHHNS", 
+                                    "AITS", "AITSFP", "AITSCC", "AITSNS","TTRACT", 
+                                    "TBLKGRP", "ANRC", "ANRCCC", "ANRCNS", "CBSA", 
+                                    "MEMI", "CSA", "METDIV", "NECTA",
+                                    "NMEMI", "CNECTA", "NECTADIV", "CBSAPCI", 
+                                    "NECTAPCI", "UA", "UATYPE", "UR", "CD116",
+                                    "CD118","CD119", "CD120", "CD121", "SLDU18",
+                                    "SLDU22", "SLDU24", "SLDU26", "SLDU28", 
+                                    "SLDL18", "SLDL22","SLDL24", "SLDL26", 
+                                    "SLDL28", "VTD", "VTDI", "ZCTA", "SDELM", 
+                                    "SDSEC", "SDUNI", "PUMA", "AREALAND", "AREAWATR",
+                                    "BASENAME", "NAME", "FUNCSTAT", "GCUNI",
+                                    "POP100", "HU100", "INTPTLAT", "INTPTLON",
+                                    "LSADC", "PARTFLAG", "UGA")
+
+colnames(part1.ct) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO", 
+                     paste0("P00", c(10001:10071, 20001:20073)))
+
+colnames(part2.ct) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO", 
+                     paste0("P00", c(30001:30071, 40001:40073)), 
+                     paste0("H00", 10001:10003))
+
+colnames(part3.ct) <- c("FILEID", "STUSAB", "CHARITER", "CIFSN", "LOGRECNO",
+                     paste0("P00", 50001:50010))
+
+combine.ct <- Reduce(function(x,y) {merge(x, y, by=c("LOGRECNO", "STUSAB", "FILEID", "CHARITER"))}, list(header.ct[,-7], part1.ct[,-4], part2.ct[,-4], part3.ct))
+combine.ct <- combine.ct[order(combine.ct$LOGRECNO), c("FILEID", "STUSAB", "SUMLEV", "GEOVAR", 
+                                              "GEOCOMP", "CHARITER", "CIFSN", "LOGRECNO", 
+                                              "GEOID", "GEOCODE", "REGION", "DIVISION", 
+                                              "STATE", "STATENS", "COUNTY", "COUNTYCC",
+                                              "COUNTYNS", "COUSUB","COUSUBCC", "COUSUBNS",
+                                              "SUBMCD", "SUBMCDCC", "SUBMCDNS", "ESTATE",
+                                              "ESTATECC", "ESTATENS", "CONCIT", "CONCITCC",
+                                              "CONCITNS", "PLACE", "PLACECC", "PLACENS", 
+                                              "TRACT", "BLKGRP", "BLOCK", "AIANHH", "AIHHTLI",
+                                              "AIANHHFP", "AIANHHCC", "AIANHHNS", "AITS",
+                                              "AITSFP", "AITSCC", "AITSNS","TTRACT",
+                                              "TBLKGRP", "ANRC", "ANRCCC", "ANRCNS", "CBSA",
+                                              "MEMI", "CSA", "METDIV", "NECTA",
+                                              "NMEMI", "CNECTA", "NECTADIV", "CBSAPCI",
+                                              "NECTAPCI", "UA", "UATYPE", "UR", "CD116", "CD118",
+                                              "CD119", "CD120", "CD121", "SLDU18", "SLDU22",
+                                              "SLDU24", "SLDU26", "SLDU28", "SLDL18", "SLDL22",
+                                              "SLDL24", "SLDL26", "SLDL28", "VTD", "VTDI", "ZCTA",
+                                              "SDELM", "SDSEC", "SDUNI", "PUMA", "AREALAND",
+                                              "AREAWATR", "BASENAME", "NAME", "FUNCSTAT", "GCUNI",
+                                              "POP100", "HU100", "INTPTLAT", "INTPTLON", 
+                                              "LSADC", "PARTFLAG", "UGA", 
+                                              paste0("P00",c(10001:10071, 20001:20073)),
+                                              paste0("P00",c(30001:30071, 40001:40073)), 
+                                              paste0("H00", 10001:10003), 
+                                              paste0("P00", 50001:50010))]
+rownames(combine.ct) <- 1:nrow(combine.ct)
+```
+
+#Extracting data 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+#Extracting data from census datasets
+
+#Massachusetts
+ma.vars.census <- combine.ma %>% filter(SUMLEV == "050") %>%
+  select(
+   GEOCODE,
+   HU100,
+   H0010003,
+   UA,
+   POP100,
+   P0010003,
+   P0010004,
+   P0010005,
+   P0010006,
+   P0010007,
+   P0010008,
+   P0010009,
+   P0010010,
+   P0010026,
+   P0010047,
+   P0010063,
+   P0010070,
+   P0020002,
+   P0050003,
+   P0050004,
+   P0050005,
+   P0050006,
+   P0050007,
+   P0050008,
+   P0050009,
+   P0050010,
+   INTPTLAT,
+   INTPTLON,) %>%
+  rename( "CountyCode" = GEOCODE,
+  "HousingUnitCountPCT" = HU100,
+  "VacantLots" = H0010003,
+  "UrbanArea" = UA,
+ "PopulationCount" = POP100 ,
+  "WhitePopulation" = P0010003,
+ "BlackorAfrican" =  P0010004,
+"AmericanIndianAndAlaskaNative" = P0010005,
+"Asian" = P0010006,
+"NativeHawaiianAndOtherPacificIslander" = P0010007,
+"SomeOtherRace" = P0010008,
+"PopulationoftwoOrMoreRaces" = P0010009,
+"PopulationTwoTaces" = P0010010,
+"PopulatioThreeRaces" = P0010026,
+"PopulationFourRaces" = P0010047,
+"PopulationFiveRaces" = P0010063,
+"PopulationSixRaces" = P0010070,
+"HispanicOrLatino" = P0020002,
+"PopulationCorrectionalFacilitiesForAdults" = P0050003,
+"PopulationJuvenileFacilities" = P0050004,
+"PopulationNursingFacilitiesOrSkilledNursingFacilities" = P0050005,
+"OtherInstitutionalFacilities" = P0050006,
+"NoninstitutionalizedPopulation" = P0050007,
+"PopulationCollegeUniversityStudentHousing" = P0050008,
+"PopulationMilitaryQuarters" = P0050009,
+"PopulationOtherNoninstitutionalFacilities" = P0050010,
+    Latitude = INTPTLAT,
+    Longitude = INTPTLON)
+
+# Vermont
+vt.vars.census <- combine.vt %>% 
+  filter(SUMLEV == "050") %>% 
+  select(
+   GEOCODE,
+   HU100,
+   H0010003,
+   UA,
+   POP100,
+   P0010003,
+   P0010004,
+   P0010005,
+   P0010006,
+   P0010007,
+   P0010008,
+   P0010009,
+   P0010010,
+   P0010026,
+   P0010047,
+   P0010063,
+   P0010070,
+   P0020002,
+   P0050003,
+   P0050004,
+   P0050005,
+   P0050006,
+   P0050007,
+   P0050008,
+   P0050009,
+   P0050010,
+   INTPTLAT,
+   INTPTLON,) %>%
+    rename( "CountyCode" = GEOCODE,
+  "HousingUnitCountPCT" = HU100,
+  "VacantLots" = H0010003,
+  "UrbanArea" = UA,
+ "PopulationCount" = POP100 ,
+  "WhitePopulation" = P0010003,
+ "BlackorAfrican" =  P0010004,
+"AmericanIndianAndAlaskaNative" = P0010005,
+"Asian" = P0010006,
+"NativeHawaiianAndOtherPacificIslander" = P0010007,
+"SomeOtherRace" = P0010008,
+"PopulationoftwoOrMoreRaces" = P0010009,
+"PopulationTwoTaces" = P0010010,
+"PopulatioThreeRaces" = P0010026,
+"PopulationFourRaces" = P0010047,
+"PopulationFiveRaces" = P0010063,
+"PopulationSixRaces" = P0010070,
+"HispanicOrLatino" = P0020002,
+"PopulationCorrectionalFacilitiesForAdults" = P0050003,
+"PopulationJuvenileFacilities" = P0050004,
+"PopulationNursingFacilitiesOrSkilledNursingFacilities" = P0050005,
+"OtherInstitutionalFacilities" = P0050006,
+"NoninstitutionalizedPopulation" = P0050007,
+"PopulationCollegeUniversityStudentHousing" = P0050008,
+"PopulationMilitaryQuarters" = P0050009,
+"PopulationOtherNoninstitutionalFacilities" = P0050010,
+    Latitude = INTPTLAT,
+    Longitude = INTPTLON)
+
+#Pennsylvania
+pa.vars.census <- combine.pa %>% 
+  filter(SUMLEV == "050") %>% 
+  select(
+   GEOCODE,
+   HU100,
+   H0010003,
+   UA,
+   POP100,
+   P0010003,
+   P0010004,
+   P0010005,
+   P0010006,
+   P0010007,
+   P0010008,
+   P0010009,
+   P0010010,
+   P0010026,
+   P0010047,
+   P0010063,
+   P0010070,
+   P0020002,
+   P0050003,
+   P0050004,
+   P0050005,
+   P0050006,
+   P0050007,
+   P0050008,
+   P0050009,
+   P0050010,
+   INTPTLAT,
+   INTPTLON,) %>%
+    rename( "CountyCode" = GEOCODE,
+  "HousingUnitCountPCT" = HU100,
+  "VacantLots" = H0010003,
+  "UrbanArea" = UA,
+ "PopulationCount" = POP100 ,
+  "WhitePopulation" = P0010003,
+ "BlackorAfrican" =  P0010004,
+"AmericanIndianAndAlaskaNative" = P0010005,
+"Asian" = P0010006,
+"NativeHawaiianAndOtherPacificIslander" = P0010007,
+"SomeOtherRace" = P0010008,
+"PopulationoftwoOrMoreRaces" = P0010009,
+"PopulationTwoTaces" = P0010010,
+"PopulatioThreeRaces" = P0010026,
+"PopulationFourRaces" = P0010047,
+"PopulationFiveRaces" = P0010063,
+"PopulationSixRaces" = P0010070,
+"HispanicOrLatino" = P0020002,
+"PopulationCorrectionalFacilitiesForAdults" = P0050003,
+"PopulationJuvenileFacilities" = P0050004,
+"PopulationNursingFacilitiesOrSkilledNursingFacilities" = P0050005,
+"OtherInstitutionalFacilities" = P0050006,
+"NoninstitutionalizedPopulation" = P0050007,
+"PopulationCollegeUniversityStudentHousing" = P0050008,
+"PopulationMilitaryQuarters" = P0050009,
+"PopulationOtherNoninstitutionalFacilities" = P0050010,
+    Latitude = INTPTLAT,
+    Longitude = INTPTLON)
+
+# New York 
+ny.vars.census <- combine.ny %>%
+  filter(SUMLEV == "050") %>%
+  select(
+   GEOCODE,
+   HU100,
+   H0010003,
+   UA,
+   POP100,
+   P0010003,
+   P0010004,
+   P0010005,
+   P0010006,
+   P0010007,
+   P0010008,
+   P0010009,
+   P0010010,
+   P0010026,
+   P0010047,
+   P0010063,
+   P0010070,
+   P0020002,
+   P0050003,
+   P0050004,
+   P0050005,
+   P0050006,
+   P0050007,
+   P0050008,
+   P0050009,
+   P0050010,
+   INTPTLAT,
+   INTPTLON) %>%
+    rename( "CountyCode" = GEOCODE,
+  "HousingUnitCountPCT" = HU100,
+  "VacantLots" = H0010003,
+  "UrbanArea" = UA,
+ "PopulationCount" = POP100 ,
+  "WhitePopulation" = P0010003,
+ "BlackorAfrican" =  P0010004,
+"AmericanIndianAndAlaskaNative" = P0010005,
+"Asian" = P0010006,
+"NativeHawaiianAndOtherPacificIslander" = P0010007,
+"SomeOtherRace" = P0010008,
+"PopulationoftwoOrMoreRaces" = P0010009,
+"PopulationTwoTaces" = P0010010,
+"PopulatioThreeRaces" = P0010026,
+"PopulationFourRaces" = P0010047,
+"PopulationFiveRaces" = P0010063,
+"PopulationSixRaces" = P0010070,
+"HispanicOrLatino" = P0020002,
+"PopulationCorrectionalFacilitiesForAdults" = P0050003,
+"PopulationJuvenileFacilities" = P0050004,
+"PopulationNursingFacilitiesOrSkilledNursingFacilities" = P0050005,
+"OtherInstitutionalFacilities" = P0050006,
+"NoninstitutionalizedPopulation" = P0050007,
+"PopulationCollegeUniversityStudentHousing" = P0050008,
+"PopulationMilitaryQuarters" = P0050009,
+"PopulationOtherNoninstitutionalFacilities" = P0050010,
+    Latitude = INTPTLAT,
+    Longitude = INTPTLON)
+
+#New Hampshire
+nh.vars.census <- combine.nh %>% 
+   filter(SUMLEV == "050") %>%
+  select(
+   GEOCODE,
+   HU100,
+   H0010003,
+   UA,
+   POP100,
+   P0010003,
+   P0010004,
+   P0010005,
+   P0010006,
+   P0010007,
+   P0010008,
+   P0010009,
+   P0010010,
+   P0010026,
+   P0010047,
+   P0010063,
+   P0010070,
+   P0020002,
+   P0050003,
+   P0050004,
+   P0050005,
+   P0050006,
+   P0050007,
+   P0050008,
+   P0050009,
+   P0050010,
+   INTPTLAT,
+   INTPTLON,) %>%
+   rename( "CountyCode" = GEOCODE,
+  "HousingUnitCountPCT" = HU100,
+  "VacantLots" = H0010003,
+  "UrbanArea" = UA,
+ "PopulationCount" = POP100 ,
+  "WhitePopulation" = P0010003,
+ "BlackorAfrican" =  P0010004,
+"AmericanIndianAndAlaskaNative" = P0010005,
+"Asian" = P0010006,
+"NativeHawaiianAndOtherPacificIslander" = P0010007,
+"SomeOtherRace" = P0010008,
+"PopulationoftwoOrMoreRaces" = P0010009,
+"PopulationTwoTaces" = P0010010,
+"PopulatioThreeRaces" = P0010026,
+"PopulationFourRaces" = P0010047,
+"PopulationFiveRaces" = P0010063,
+"PopulationSixRaces" = P0010070,
+"HispanicOrLatino" = P0020002,
+"PopulationCorrectionalFacilitiesForAdults" = P0050003,
+"PopulationJuvenileFacilities" = P0050004,
+"PopulationNursingFacilitiesOrSkilledNursingFacilities" = P0050005,
+"OtherInstitutionalFacilities" = P0050006,
+"NoninstitutionalizedPopulation" = P0050007,
+"PopulationCollegeUniversityStudentHousing" = P0050008,
+"PopulationMilitaryQuarters" = P0050009,
+"PopulationOtherNoninstitutionalFacilities" = P0050010,
+    Latitude = INTPTLAT,
+    Longitude = INTPTLON)
+
+# Connecticut
+ct.vars.census <- combine.ct %>% 
+  filter(SUMLEV == "050") %>%
+  select(
+   GEOCODE,
+   HU100,
+   H0010003,
+   UA,
+   POP100,
+   P0010003,
+   P0010004,
+   P0010005,
+   P0010006,
+   P0010007,
+   P0010008,
+   P0010009,
+   P0010010,
+   P0010026,
+   P0010047,
+   P0010063,
+   P0010070,
+   P0020002,
+   P0050003,
+   P0050004,
+   P0050005,
+   P0050006,
+   P0050007,
+   P0050008,
+   P0050009,
+   P0050010,
+   INTPTLAT,
+   INTPTLON,) %>%
+    rename( "CountyCode" = GEOCODE,
+  "HousingUnitCountPCT" = HU100,
+  "VacantLots" = H0010003,
+  "UrbanArea" = UA,
+ "PopulationCount" = POP100 ,
+  "WhitePopulation" = P0010003,
+ "BlackorAfrican" =  P0010004,
+"AmericanIndianAndAlaskaNative" = P0010005,
+"Asian" = P0010006,
+"NativeHawaiianAndOtherPacificIslander" = P0010007,
+"SomeOtherRace" = P0010008,
+"PopulationoftwoOrMoreRaces" = P0010009,
+"PopulationTwoTaces" = P0010010,
+"PopulatioThreeRaces" = P0010026,
+"PopulationFourRaces" = P0010047,
+"PopulationFiveRaces" = P0010063,
+"PopulationSixRaces" = P0010070,
+"HispanicOrLatino" = P0020002,
+"PopulationCorrectionalFacilitiesForAdults" = P0050003,
+"PopulationJuvenileFacilities" = P0050004,
+"PopulationNursingFacilitiesOrSkilledNursingFacilities" = P0050005,
+"OtherInstitutionalFacilities" = P0050006,
+"NoninstitutionalizedPopulation" = P0050007,
+"PopulationCollegeUniversityStudentHousing" = P0050008,
+"PopulationMilitaryQuarters" = P0050009,
+"PopulationOtherNoninstitutionalFacilities" = P0050010,
+    Latitude = INTPTLAT,
+    Longitude = INTPTLON)
+
+
+
+```
+
+
+
+
+# Suicide dataset import and cleaning
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#suicide data from CDC WONDER website
+#https://wonder.cdc.gov/controller/datarequest/D76;jsessionid=DE0872E22975C00841A274707E46
+suicide.data <- Underlying_Cause_of_Death_1999_2020_2_
+
+sdat <- suicide.data
+
+#Creating true/false columns for race
+
+```
+
+# Combining Datasets
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Remove leading zero in ct dataset county code
+
+#rename columns to join in one common dataset
+colnames(all.pops) <- c("CountyCode", "POP", "geometry")
+
+#join error fix 
+sdat <- sdat %>%  
+  rename("CountyCode" = `County Code`,
+         CrudeRate = 'Crude Rate')
+
+sdat <- sdat %>% 
+    mutate("CountyCode" = as.character(sdat$`CountyCode`),
+           CrudeRate = round(Deaths/Population*100000,2))
+
+#Remove Notes column
+#mutate 09015 county code to 9015
+
+merge1 <- full_join(all.pops,sdat)
+
+merge.vt <- left_join(merge1, vt.vars.census)
+
+merge.pa <- left_join(merge1, pa.vars.census)
+
+merge.ny <- left_join(merge1, ny.vars.census)
+
+merge.nh <- left_join(merge1, nh.vars.census)
+
+merge.ma <- left_join(merge1, ma.vars.census)
+
+#join fix for ct
+
+ct.vars.census <- ct.vars.census %>%  
+    mutate("CountyCode" = as.character(ct.vars.census$`CountyCode`))
+
+merge.ct <- left_join(merge1, ct.vars.census)
+
+## selecting for vars by state
+
+merge.vt <- merge.vt %>% 
+  filter(State == "Vermont")
+
+
+merge.pa <- merge.pa %>% 
+  filter(State == "Pennsylvania")
+
+
+merge.ny <- merge.ny %>% 
+  filter(State == "New York")
+
+
+merge.nh <- merge.nh %>% 
+  filter(State == "New Hampshire")
+
+
+merge.ma <- merge.ma %>% 
+  filter(State == "Massachusetts")
+
+
+merge.ct <- merge.ct %>% 
+  filter(State == "Connecticut")
+
+#Binding all the datasets together
+
+d1 <- rbind(merge.vt, merge.pa)
+d1 <- rbind(d1, merge.ny)
+d1 <- rbind(d1, merge.nh)
+d1 <- rbind(d1, merge.ma)
+d1 <- rbind(d1, merge.ct)
+
+d1 <- d1 %>% select(!Notes) 
+
+d <- d1 %>% 
+  select (! c(CountyCode, State, County, Latitude, geometry)) 
+
+d <- as.data.frame(d)
+
+d <- mutate_all(d, function(x) as.numeric(as.character(x)))
+
+sapply(d, class)
+
+d <- d %>% select(! geometry)
+
+character.d <- d1 %>% select  (c(CountyCode, State, County, Longitude, Latitude, geometry))
+
+class(character.d)
+
+character.d$Longitude <- as.numeric(as.character(character.d$Longitude))
+
+
+new.d1 <- inner_join (character.d, d)
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+class(d1)
+class(new.d1)
+
+#remove empty polyglons
+
+new.d1 <- new.d1[ ! st_is_empty( new.d1 ) , ]
+
+#save as spatial 
+
+new.d1.sp <- as_Spatial(new.d1)
+```
+
+```{r, include = F}
+new.d1.sp <- spTransform( new.d1.sp, CRS("+init=epsg:3395"))
+new.d1.sp <- new.d1.sp[ new.d1.sp$POP != 0 & (! is.na( new.d1.sp$POP )) , ]
+
+# convert census tract polygons to dorling cartogram
+# no idea why k=0.03 works, but it does - default is k=5
+new.d1.sp$pop.w <- new.d1.sp$POP / 9000 # max(bos.sp$POP)   # standardizes it to max of 1.5
+merge_dorling <- cartogram_dorling( x=new.d1.sp, weight="pop.w", k=0.05 )
+```
+
+```{r, include = F}
+row.ids <- sapply( slot( merge_dorling, "polygons" ), function(x) slot( x, "ID" ) )
+row.names( merge_dorling ) <- row.ids
+
+# project to standard lat-lon coordinate system 
+merge_dorling <- spTransform( merge_dorling, CRS("+proj=longlat +datum=WGS84") )
+```
+
+```{r, include = F}
+
+d <- merge_dorling@data
+
+demographics <- c("CrudeRate", "Deaths", "Population", "PopulationCorrectionalFacilitiesForAdults","VacantLots", "HispanicOrLatino", "BlackorAfrican", "AmericanIndianAndAlaskaNative", "WhitePopulation", "Asian", "HousingUnitCountPCT", "NativeHawaiianAndOtherPacificIslander","SomeOtherRace", "PopulationoftwoOrMoreRaces", "PopulationTwoTaces", "PopulatioThreeRaces", "PopulationFourRaces", "PopulationFiveRaces", "PopulationSixRaces", "PopulationJuvenileFacilities", "PopulationNursingFacilitiesOrSkilledNursingFacilities", "OtherInstitutionalFacilities", "NoninstitutionalizedPopulation")
+d <- d %>% 
+  select(! c(CountyCode, State, County, Longitude, Latitude, UrbanArea, State, County)) %>%
+  mutate(CrudeRate = round(Deaths/Population*100000,2))
+  
+d2 <- d
+
+d2 <- lapply(d2,as.numeric)
+
+d2 <- as.data.frame(d2)
+
+d3 <- apply( d2, 2, scale )
+```
+
+```{r, include = F}
+
+
+set.seed( 1234 )
+
+fit <- Mclust( d2 )
+
+merge_dorling$cluster <- fit$classification
+
+data1 <- merge_dorling@data
+
+geojson_write( merge_dorling, file="merge_dorling.geojson", geometry="polygon" )
+```
+
+
+```
+
+
