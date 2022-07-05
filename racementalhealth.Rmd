@@ -1,0 +1,575 @@
+---
+title: "Suicide, Race & PTSD: East Coast"
+output: 
+  flexdashboard::flex_dashboard:
+    theme: lumen
+    vertical_layout: fill
+    orientation: rows
+    social: menu
+    source: embed
+    smart: false
+runtime: shiny
+---
+
+```{r global, echo=F}
+
+library(flexdashboard)
+library( geojsonio )   # read shapefiles
+library( sp )          # work with shapefiles
+library( sf )          # work with shapefiles - simple features format
+library( tmap )        # theme maps
+library( ggplot2 )     # graphing 
+library( ggthemes )    # nice formats for ggplots
+library( dplyr )       # data wrangling 
+library( pander )      # formatting RMD tables
+library(corrplot)     #correlation plots
+library( cartogram )  # spatial maps w/ tract size bias reduction
+library( maptools )   # spatial object manipulation 
+library( tidycensus ) #get data
+library( tigris )   #get data
+library(rgdal)      #shapefiles
+library( flexdashboard ) #dashboard
+library( shiny )
+library( rsconnect )    #rmarkdown to shiny
+library( DT )   #datatables
+library( pander )   #pander
+library( stargazer ) #regression tables
+library( ggmap ) #maps
+library( leaflet ) #maps
+library(scales) #colors
+library( viridis )  # scale fill functions
+library( pals ) #colors
+#library(basemaps) #maps
+library(DataExplorer)
+library(highcharter) #color themes
+library(flexdashboard) #layout
+library(readxl) #to read Excel files
+library(networkD3) #diagonal network function
+#data(ext)
+
+ptsd.url <-"https://raw.githubusercontent.com/krbrick/racementalhealthproject/main/PTSD_Outcome_Comparisons_Between_Treatment_Arms.csv"
+
+PTSD_Outcome_Comparisons_Between_Treatment_Arms <- read.csv( ptsd.url,  stringsAsFactors=F, colClasses="character" )
+#ptsd.outcomes <- read_excel( ptsd.url )
+
+PTSD_Outcome_Comparisons_Between_Treatment_Arms <- mutate_all(PTSD_Outcome_Comparisons_Between_Treatment_Arms, function(x) as.numeric(as.character(x)))
+
+#PTSD_Outcome_Comparisons_Between_Treatment_Arms <- read_excel("~/Desktop/Applied Project/PTSD_Outcome_Comparisons_Between_Treatment_Arms.xlsx")
+
+ptsd.outcomes <- PTSD_Outcome_Comparisons_Between_Treatment_Arms
+
+data_list1 <- list (ptsd.outcomes)
+
+data_list2 <- list(ptsd.outcomes[1:15])
+
+data_list3 <- list(ptsd.outcomes[1:25])
+```
+
+```{r , echo=FALSE}
+# DATA STEPS 
+github.url <- "https://raw.githubusercontent.com/krbrick/racementalhealthproject/main/merge_dorling.geojson"
+
+eastern.seaboard <- geojson_read( x=github.url,  what="sp" )
+
+# reprojecting the map 
+eastern.seaboard.sp <- spTransform( eastern.seaboard, CRS("+init=epsg:3395") )
+
+# converting the sp map format to sf (simple features) format
+eastern.seaboard.sf <- st_as_sf( eastern.seaboard.sp )
+
+# separating out the data frame from the map
+d <- as.data.frame(eastern.seaboard.sf )
+
+PTSDdata <- PTSD_Outcome_Comparisons_Between_Treatment_Arms
+PTSDdata <- PTSDdata %>% 
+rename(Effect.Size = Effect.Size.1.Value, 
+       Score.Difference = Score.Difference.1.Value,
+       Follow.Up.in.Weeks = Follow.Up.Assessment.in.Weeks,
+       Diagnostic.Change.Effect.Size = Diagnostic.Change.1.Effect.Size.Value,
+       Community.Pct = Community.Percent..Study.level.,
+       Veteran.Pct = Veteran.Percent..Study.level., 
+       Female.Pct = Female.Percent..Study.level.,
+       Male.Pct = Male.Percent..Study.level.,
+       active.duty.military.Pct = Active.Duty.Military.Percent..Study.level.,
+       clinically.meaningful.response = Clinically.Meaningful.Response.1.Effect.Size.Value)
+```
+
+**Literature Review**
+=======================================================================
+
+### **Background**
+
+
+The interplay of suicide, unemployment, race, and post-traumatic stress disorder (PTSD) is dynamic and complex. The relationship between suicide and PTSD is established, as is the relationship between unemployment and suicide. Those who have PTSD may struggle to keep or attain employment, and the lack of employment may lead to suicide risk. Race-related PTSD and disparities within the mental health system based on race may exacerbate PTSD symptomology and suicide risk. Suicide risk may also be moderated or influenced by race. Suicide risk is not distributed equally across races, and neither is PTSD. Suicide risk and unemployment rates are different for those living with PTSD stemming from certain trauma types. Refugees and immigrants are more at risk for suicide than the general population. 
+
+
+The inclusion of race-related stress, experienced racism, prejudice, micro-aggression, and race-related trauma in research regarding PTSD and other trauma-related mental health sequelae is a new addition to contemporary psychological research (Carter, 2007). The Diagnostic and Statistical Manual of Mental Disorders (DSM-5) is used by as a standard by clinicians and recognized for insurance purposes. Inclusion of race-related trauma in the current edition has been called for (Williams et al., 2018, Holmes et al. 2016).  
+
+
+While current debates rage on about whether racism exists and what it is (UMass Lowell 2020, Pew Research Center 2019), the growing body of research regarding this phenomenon is clear: racial discrimination is highly associated with PTSD and other mental health diagnoses (Bird et al. 2021, Carter 2020, Sibrava et al. 2019). Research has illustrated a narrative that living as a non-white individual in the U.S. may result in a higher chance of experiencing mental health conditions so painful that a person may end their own life. 
+
+
+A lack of unified understanding of the relationship between race and PTSD results in a treatment system that, at best, does not address related mental health issues and at worst, exacerbates them: one of the most prominent scales used to measure racism is called the ‘perceived’ racism scale (The Perceived Racism Scale, McNeilly 1996).  Arguments against the use of such terminology have been made (Bird et al, 2021, Cheng & Mallinckrodt, 2015). To make a blunt comparison, it would be insulting to a patient and damaging to the treatment process to ask a veteran to complete a questionnaire that labeled the trauma of what they witnessed or experienced as ‘perceived trauma’. 
+Furthermore, currently accepted treatment methodologies for PTSD may not be effective for race-related PTSD. Exposure therapy and CBT treat PTSD by assuring patients that the trauma happened but is over, and that subsequently trying to retrain the mind to live in a more peaceable present, rather than living in a state of hypervigilance or fear. For those with race-related PTSD, discrimination experienced in systemic racism may be ongoing, and these treatments are not appropriate (Bird et al, 2021). In this light, heavy research and funding should be applied to race-related mental health treatments, but that is unlikely given how few people acknowledge the existence of race related trauma. 
+
+
+More than one study has shown that ethnic identity and race-related stress moderate PTSD, meaning that ethnic identity is associated with PTSD symptomology in response to racism. Race-related stress also predicted PTSD symptomology (Khaylis et al., 2007, Polanco-Roman et al. 2015).  Adverse race-related incidents have been shown to be associated with increased scores on clinician-administered scales for PTSD in Asian American Vietnam veterans (Loo et al, 2005). 
+
+
+PTSD has long been associated with experiences of war (Crocq and Crocq 2022). Active service members who sought treatment who were Latino or African American were reported to have re-experienced symptoms, fear, and guilt and numbing more than white participants (Asnaani and Hall-Clark, 2017). In a qualitative study of Asian American veterans, Loo (1994) explores the experiences of Asian American service members in the Vietnam war. This is a singular situation in which Asian Americans are of the same race category as the native people defending themselves from American soldiers. This experience of racism by Asian American service members is not limited to the intersection of identity to native Vietnamese.
+
+
+In situations which may lead to PTSD, especially prolonged situations of danger, soldiers need to depend on their peers for emotional support. Higher morale among the group can protect against psychological issues (Grinker and Spiegel, 1945, Whitesell, 2012). However, if a member experiences racism from within members of the group, this protective factor may be violated. 
+
+
+PTSD is not evenly distributed across races. PTSD has been shown to be highest among Black people (possibly due to racial trauma and witnessing domestic violence and child maltreatment) intermediate among Latinos (witnessing domestic violence and child maltreatment) and White people, and lowest among Asian Americans (Roberts, 2011). The reduced number of Asian Americans with PTSD may be due to increased mental health stigma for Asian Americans (Chu et al, 2021). One can assume that the racial differences in PTSD occurrence may be due to a variety of social, cultural, and systemic variables. 
+Suicide risk is associated with PTSD, both in civilians (Tarrier & Greg, 2004) and veterans (Prigerson et al., 2001). In one study, close to 10% of civilians with PTSD made a suicide attempt since the trauma associated with PTSD occurred, with 38% reporting suicidal ideation. There are mediating psychiatric conditions that link PTSD and suicide. Those that have other mental health issues are more likely to experience suicidal ideation and attempt (Krysinska & Lester, 2010).  In participants who had PTSD related to a previous suicidal attempt, those with low levels of depression symptoms scored higher on scales measuring suicidal intent in one study (Stanley et al., 2019). When looking at PTSD by trauma type, those with PTSD who had experienced childhood maltreatment, assaultive violence, and peacekeeping (UN peacekeepers, those who are employed in post-conflict or post-disaster situations) traumas experienced the most suicidal ideation and attempt (LeBouthillier et al. 2015). 
+
+
+Immigrants and refugees are especially vulnerable to suicide (Amiri 2020) with increased
+trauma associated with greater suicide risk (Bhui et al., 2003). As with PTSD, suicide risk is not evenly distributed between races. With the onset of COVID-19, different subsets of the population have shown increased suicide risk, notably Black and Asian American or Pacific Islander youth (Ramchand et al., 2021). 
+
+
+PTSD may result in lowered quality of life by impacting employment status and intimate relationship health. Veterans who report combat trauma as their most traumatic event may be more likely to be unemployed (Prigerson et al., 2001) as well as divorced, fired, or physically abusive to their spouses. Additionally, PTSD is associated with sexual dysfunction, especially for those who have experienced sexual violence as the index trauma, or the trauma that marks the beginning of PTSD (O’Driscoll & Flanagan, 2016). The severity of PTSD coupled with unemployment also predicted suicidal attempt in Prigerson’s 2001 study.
+
+
+Unemployment is associated with greater suicide risk and attempt (Milner et al. 2013, Lundin & Hemmingsson 2009), with those in the first five years of unemployment at the greatest risk. Alternately, Kposowa (2001) found that women and men have different suicide risk in the context of unemployment. Unemployed men were twice as likely as employed men to commit suicide. For women, risk of suicide increased with each year of unemployment. Unemployment protection in European countries has been shown to mitigate suicide risk (Norström & Grönqvist, 2015) in the context of the great recession. 
+In conclusion, traumatic can trigger life-long mental health sequelae. These sequelae may snowball into worsening quality of life through an interplay of such issues as unemployment, suicide risk, conflict, or dysfunctionality in relationships, and continuing re-traumatization through racial discrimination. 
+
+
+References
+
+Amiri, S. (2020). Prevalence of suicide in immigrants/refugees: a systematic review and meta-analysis. Archives of suicide research, 1-36.
+
+Asnaani, A., & Hall-Clark, B. (2017). Recent developments in understanding ethnocultural and race differences in trauma exposure and PTSD. Current opinion in psychology, 14, 96-101.
+
+Bird, C. M., Webb, E. K., Schramm, A. T., Torres, L., Larson, C., & deRoon‐Cassini, T. A. (2021). Racial discrimination is associated with acute posttraumatic stress symptoms and predicts future posttraumatic stress disorder symptom severity in trauma‐exposed Black adults in the United States. Journal of traumatic stress, 34(5), 995-1004.
+
+Carter, R. T. (2007). Racism and psychological and emotional injury: Recognizing and assessing race-based traumatic stress. The Counseling Psychologist, 35(1), 13–105. https://doi.org/10.1177/0011000006292033
+
+Carter, R. T., Lau, M. Y., Johnson, V., & Kirkinis, K. (2017). Racial discrimination and health outcomes among racial/ethnic minorities: A meta-analytic review. Journal of Multicultural Counseling and Development, 45(4), 232– 259. https://doi.org/10.1002/jmcd.12076
+
+Carter, R. T., Kirkinis, K., & Johnson, V. E. (2020). Relationships between trauma symptoms and race-based traumatic stress. Traumatology, 26(1), 11– 18. https://doi.org/10.1037/trm0000217
+
+Cheng, H. L., & Mallinckrodt, B. (2015). Racial/ethnic discrimination, posttraumatic stress symptoms, and alcohol problems in a longitudinal study of Hispanic/Latino college students. Journal of Counseling Psychology, 62(1), 38–49. https://doi.org/10.1037/cou0000052
+
+Chu, K. M., Garcia, S. M., Koka, H., Wynn, G. H., & Kao, T. C. (2021). Mental health care utilization and stigma in the military: comparison of Asian Americans to other racial groups. Ethnicity & Health, 26(2), 235-250.
+
+Crocq, M. A., & Crocq, L. (2022). From shell shock and war neurosis to posttraumatic stress disorder: a history of psychotraumatology. Dialogues in clinical neuroscience.
+
+Grinker, R. R., & Spiegel, J. P. (1945). Men under stress.
+
+Holliday, R., Borges, L. M., Stearns-Yoder, K. A., Hoffberg, A. S., Brenner, L. A., & Monteith, L. L. (2020). Posttraumatic stress disorder, suicidal ideation, and suicidal self-directed violence among US military personnel and veterans: A systematic review of the literature from 2010 to 2018. Frontiers in psychology, 1998.
+
+Holmes, S. C., Facemire, V. C., & DaFonseca, A. M. (2016). Expanding criterion a for posttraumatic stress disorder: Considering the deleterious impact of oppression. Traumatology, 22(4), 314.
+
+Khaylis, A., Waelde, L., & Bruce, E. (2007). The role of ethnic identity in the relationship of race-related stress to PTSD symptoms among young adults. Journal of Trauma & Dissociation, 8(4), 91-105.
+
+Kposowa, A. J. (2001). Unemployment and suicide: a cohort analysis of social factors predicting suicide in the US National Longitudinal Mortality Study. Psychological medicine, 31(1), 127-138.
+
+Krysinska, K., & Lester, D. (2010). Post-traumatic stress disorder and suicide risk: a systematic review. Archives of suicide research, 14(1), 1-23.
+
+LeBouthillier, D. M., McMillan, K. A., Thibodeau, M. A., & Asmundson, G. J. (2015). Types and number of traumas associated with suicidal ideation and suicide attempts in PTSD: Findings from a US nationally representative sample. Journal of traumatic stress, 28(3), 183-190
+
+Lo, C. C., & Cheng, T. C. (2014). Race, unemployment rate, and chronic mental illness: a 15-year trend analysis. Social psychiatry and psychiatric epidemiology, 49(7), 1119-1128.
+
+Loo, C. M. (1994). Race‐related PTSD: The Asian American Vietnam veteran. Journal of Traumatic Stress, 7(4), 637-656.
+
+Loo, C. M., Fairbank, J. A., & Chemtob, C. M. (2005). Adverse race-related events as a risk factor for posttraumatic stress disorder in Asian American Vietnam veterans. The Journal of nervous and mental disease, 193(7), 455-463.
+
+Lundin, A., & Hemmingsson, T. (2009). Unemployment and suicide. The Lancet.
+
+McNeilly, M. D., Anderson, N. B., Armstead, C. A., Clark, R., Corbett, M., Robinson, E. L., ... & Lepisto, E. M. (1996). The perceived racism scale: a multidimensional assessment of the experience of white racism among African Americans. Ethnicity & disease.
+
+Milner, A., Page, A., & LaMontagne, A. D. (2013). Long-term unemployment and suicide: a systematic review and meta-analysis. PloS one, 8(1), e51333.
+
+Norström, T., & Grönqvist, H. (2015). The Great Recession, unemployment and suicide. J epidemiol community health, 69(2), 110-116.
+
+O'Driscoll, C., & Flanagan, E. (2016). Sexual problems and post‐traumatic stress disorder following sexual trauma: A meta‐analytic review. Psychology and Psychotherapy: Theory, Research and Practice, 89(3), 351-367.
+
+Panagioti, M., Gooding, P., & Tarrier, N. (2009). Post-traumatic stress disorder and suicidal behavior: A narrative review. Clinical psychology review, 29(6), 471-482.
+
+Pew Research Center. (2019) Race in American 2019. https://www.pewresearch.org/social-trends/2019/04/09/race-in-america-2019/
+
+Polanco-Roman, L., Miranda, R., Hien, D., & Anglin, D. M. (2021). Racial/ethnic discrimination as race-based trauma and suicide-related risk in racial/ethnic minority young adults: The explanatory roles of stress sensitivity and dissociation. Psychological Trauma: Theory, Research, Practice, and Policy, 13(7), 759–767. https://doi.org/10.1037/tra0001076
+
+Prigerson, H. G., Maciejewski, P. K., & Rosenheck, R. A. (2001). Combat trauma: trauma with highest risk of delayed onset and unresolved posttraumatic stress disorder symptoms, unemployment, and abuse among men. The Journal of nervous and mental disease, 189(2), 99-108.
+
+Ramchand, R., Gordon, J. A., & Pearson, J. L. (2021). Trends in suicide rates by race and ethnicity in the United States. JAMA network open, 4(5), e2111563-e2111563.
+
+Roberts, A. L., Gilman, S. E., Breslau, J., Breslau, N., & Koenen, K. C. (2011). Race/ethnic differences in exposure to traumatic events, development of post-traumatic stress disorder, and treatment-seeking for post-traumatic stress disorder in the United States. Psychological medicine, 41(1), 71-83.
+
+Sibrava, N. J., Bjornsson, A. S., Pérez Benítez, A. C. I., Moitra, E., Weisberg, R. B., & Keller, M. B. (2019). Posttraumatic stress disorder in African American and Latinx adults: Clinical course and the role of racial and ethnic discrimination. American Psychologist, 74(1), 101–116. https://doi.org/10. 1037/amp0000339
+
+Stanley, I. H., Hom, M. A., Boffa, J. W., Stage, D. R. L., & Joiner, T. E. (2019). PTSD from a suicide attempt: an empirical investigation among suicide attempt survivors. Journal of clinical psychology, 75(10), 1879-1895.
+
+Tarrier, N., & Gregg, L. (2004). Suicide risk in civilian PTSD patients. Social psychiatry and psychiatric epidemiology, 39(8), 655-661.
+
+UMass Lowell (2020). Poll: Americans’ Views of Systemic Racism Divided by Race. https://www.uml.edu/News/press-releases/2020/SocialIssuesPoll092220.aspx
+
+Williams, M. T., Metzger, I. W., Leins, C., & DeLapp, C. (2018). Assessing racial trauma within a DSM–5 framework: The UConn Racial/Ethnic Stress & Trauma Survey. Practice Innovations, 3(4), 242.
+
+Whitesell, A. A., & Owens, G. P. (2012). The impact of patriotism, morale, and unit cohesion on mental health in Veterans of Iraq and Afghanistan. Traumatology, 18(1), 1-7.
+
+
+
+
+**Maps**
+=======================================================================
+
+Inputs {.sidebar}
+-------------------------------------
+
+```{r , echo=FALSE }
+
+these.labels <- c("Population", "Population Correctional facilities for adults","Vacant Housing Units", "Hispanic or Latino", "Black or African", "American Indian and Alaska Native", "White", "Asian", "Native Hawaiian and Other Pacific Islander","Some Other Race", "Population of two or more Races (biracial)",  "Population in Juvenile Facilities", "Population Nursing Facilities or Skilled Nursing Facilities", "Other Institutional Facilities", "Noninstitutionalized Population")
+
+these.variables <- c("Population", "PopulationCorrectionalFacilitiesForAdults","VacantLots", "HispanicOrLatino", "BlackorAfrican", "AmericanIndianAndAlaskaNative", "WhitePopulation", "Asian", "NativeHawaiianAndOtherPacificIslander","SomeOtherRace", "PopulationoftwoOrMoreRaces", "PopulationJuvenileFacilities", "PopulationNursingFacilitiesOrSkilledNursingFacilities", "OtherInstitutionalFacilities", "NoninstitutionalizedPopulation")
+
+# replace these with descriptive labels 
+# from the data dictionary 
+temp.names <- paste0( "Variable ", these.variables )
+
+radioButtons( inputId="these.variables", 
+              label = h3("Variables"),
+              #choices = these.labels, 
+              choiceNames=these.labels,
+              choiceValues=these.variables,
+              selected="Population")
+
+
+```
+
+Row
+-----------------------------------------------------------------------
+
+### **Chloropleth Map: The data for these visualizations was downloaded from the CDC WONDER tool and from the US Census 202 redistricting data. Available at https://wonder.cdc.gov/ucd-icd10.html and https://www.census.gov/programs-surveys/decennial-census/about/rdo/summary-files.html**
+
+```{r , echo=FALSE}
+renderPlot({
+
+# split the selected variable into deciles 
+get_data <- 
+  reactive({
+            eastern.seaboard.sf <- 
+             eastern.seaboard.sf %>% 
+             mutate( q = ( get(input$these.variables )))
+          })
+
+ggplot( get_data() ) +
+#basemap_gglayer(ext = bb) + 
+    coord_sf(datum = NA) +
+    geom_sf( aes( fill = q)) +
+ scale_fill_gradientn( colours=(brewer.pubugn(10)), guide = "colourbar" ) +
+    labs( title = paste0( "Eastern Seaboard Select Variables", toupper(input$these.labels) ),
+          caption = "Source: CDC WONDER",
+          fill = "" ) +
+      theme_minimal()  +
+  xlim( xmin = -8300000, xmax = -7850000 ) + 
+    ylim( ymin = 4850000, ymax = 5300000 )
+})
+
+```
+
+### **Crude Rate of Suicides per 100,000**  
+
+```{r , echo=FALSE }
+# define the bounding box corners 
+bb <- st_bbox( c( xmin = -8300000, xmax = -7850000, 
+     ymax = 5300000,  ymin = 4850000 ),
+               crs = st_crs("+init=epsg:3395"))
+
+
+
+renderTmap({
+
+tmap_mode("view")
+tm_basemap( "CartoDB.Positron" )
+tm_shape( eastern.seaboard.sp , bbox = bb) + 
+  tm_polygons( col="CrudeRate", alpha = 0.75, border.col = "darkred",
+               title="Crude Rate of Suicides per 100,000" ) 
+})
+```
+
+**PTSD: Analysis**
+===================================== 
+
+Inputs {.sidebar}
+-------------------------------------
+
+```{r , echo=FALSE }
+### PTSD data layout. Data can be downloaded at: https://ptsd-va.data.socrata.com/PTSD-Repository
+
+button.label <- c("Effect Size", "Score Difference", "Diagnostic Change Effect Size", "Clinically Meaningful Response")
+dep.vars <- c ("Effect.Size", "Score.Difference", "Diagnostic.Change.Effect.Size", "clinically.meaningful.response")
+
+radioButtons( inputId="de.va", 
+              label = h3("Dependent Variable"),
+              choiceNames=button.label,
+              choiceValues=dep.vars,
+              selected= "Diagnostic.Change.Effect.Size")
+
+covars <- c("active.duty.military.Pct","Veteran.Pct", "Community.Pct","Female.Pct", "Male.Pct", "Total.N.Randomized", "Follow.Up.in.Weeks")
+
+covariate.label <- c("Active Duty Military Percent (Study level)", "Veteran Percent (Study level)", "Community Percent (Study level)","Female Percent (Study level)", "Male Percent (Study level)", "Total N Randomized", "Follow Up Assessment in Weeks")
+
+checkboxGroupInput( inputId="covars", 
+              label = h3("Select Variables for Your Model"),
+              #choices = covars,
+              choiceNames=covariate.label,
+              choiceValues=covars,
+              selected= c("active.duty.military.Pct", "Veteran.Pct", "Community.Pct","Female.Pct", "Male.Pct", "Total.N.Randomized", "Follow.Up.in.Weeks"))
+
+```
+
+Row
+-----------------------------------------------------------------------
+
+### **Regression**: **This dataset includes outcomes from a body of studies focused on PTSD treatment. Effect size describes the magnitude of effect a certain treatment is found to have. Diagnostic change describes a change in diagnosis of partcipants. Score difference indicates the change in score measurement of PTSD on psychological standaradized assessment. Clinically meaningful response indicates a large change considered meaningful to clinicians and patients.Data can be downloaded at: https://ptsd-va.data.socrata.com/PTSD-Repository**
+
+```{r, echo=FALSE, results='asis'}
+
+get_de.va <- reactive({ input$de.va })
+  
+get_covars <-  reactive({ input$covars })
+
+renderUI({
+  
+de.va <- get_de.va()
+covars <- get_covars() 
+
+formula.text <- paste0( de.va, " ~ ", paste( covars, collapse=" + " ) )
+
+fo <- as.formula( formula.text )
+
+m <- lm( fo, data=PTSDdata )
+
+
+HTML( 
+  
+  c("",
+  "",
+  stargazer( m, type="html"),
+  "",
+  ""
+  )
+  
+  )
+
+})
+
+```
+
+### **Correlation Plots** 
+
+```{r , echo=FALSE, results='asis'}
+panel.cor <- function(x, y, digits=2, prefix="", cex.cor)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y,use = "complete.obs") )
+    txt <- format(c(r, 0.123456789), digits=digits)[1]
+    txt <- paste(prefix, txt, sep="")
+    if(missing(cex.cor)) cex <- 0.5/strwidth(txt)
+    
+    test <- cor.test(x,y)
+    Signif <- symnum(test$p.value, corr = FALSE, na = FALSE,
+                  cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1),
+                  symbols = c("***", "**", "*", ".", " "))
+    
+    text(0.5, 0.5, txt, cex = 3)
+    text(.7, .8, Signif, cex=cex,  col="deeppink4")
+    
+}
+
+panel.smooth <- function (x, y, col = par("col"), bg = NA, pch = par("pch"), 
+    cex = 0.5, col.smooth = "darkcyan", span = 2/3, iter = 3, ...) 
+{
+    points(x, y, pch = 20, col = "darkblue", bg = bg, cex = cex)
+    ok <- is.finite(x) & is.finite(y)
+    if (any(ok)) 
+        lines(stats::lowess(x[ok], y[ok], f = span, iter = iter), 
+            col = col.smooth, lwd=2, ...)
+}
+
+jplot <- function( x1, x2, lab1="", lab2="", draw.line=T, ... )
+{
+
+    plot( x1, x2,
+          pch=19, 
+          col=gray(0.6, alpha = 0.2), 
+          cex=0.6,  
+          bty = "n",
+          xlab=lab1, 
+          ylab=lab2, cex.lab=4,
+        ... )
+
+    if( draw.line==T ){ 
+        ok <- is.finite(x1) & is.finite(x2)
+        lines( lowess(x2[ok]~x1[ok]), col="darkslategrey", lwd=3 ) }
+
+}
+```
+
+
+```{r , echo=FALSE }
+
+renderPlot({
+  pairs(PTSDdata[input$covars])
+})
+
+```
+
+**PTSD: Data Layout**
+=======================================================================
+
+```{r , echo=FALSE }
+diagonalNetwork(
+plot_str(data_list1, type = "r"))
+```
+
+
+
+```{r , echo=FALSE }
+### **Plot Missing Values**
+#plot_missing(ptsd.outcomes[1:30])
+
+```
+
+
+
+```{r , echo=FALSE }
+### **Memory Usage of Datasets**
+#plot_intro(ptsd.outcomes)
+  
+```
+
+**Suicide and Demographics: Analysis**   
+===================================== 
+
+Inputs {.sidebar}
+-------------------------------------
+
+```{r , echo=FALSE }
+
+button.labels <- c("Crude Rate per 100,000", "Suicides")
+dependent.vars <- c("CrudeRate", "Deaths")
+
+radioButtons( inputId="dv", 
+              label = h3("Select Your Dependent Variable"),
+              choiceNames=button.labels,
+              choiceValues=dependent.vars,
+              selected="Deaths")
+
+covariates <- c("Population", "PopulationCorrectionalFacilitiesForAdults","HousingUnitCountPCT", "VacantLots", "HispanicOrLatino", "BlackorAfrican", "AmericanIndianAndAlaskaNative", "WhitePopulation", "Asian", "NativeHawaiianAndOtherPacificIslander","SomeOtherRace", "PopulationoftwoOrMoreRaces", "PopulationJuvenileFacilities", "PopulationNursingFacilitiesOrSkilledNursingFacilities", "NoninstitutionalizedPopulation")
+
+covariate.labels <- c("Population", "Population Correctional facilities for adults"," Total Housing Units", "Vacant Housing Units", "Hispanic or Latino", "Black or African", "American Indian and Alaska Native", "White", "Asian", "Native Hawaiian and Other Pacific Islander","Some Other Race", "Population of two or more Races (biracial or multiracial)", "Population in Juvenile Facilities", "Population Nursing Facilities or Skilled Nursing Facilities", "Noninstitutionalized Population")
+
+checkboxGroupInput( inputId="covariates", 
+              label = h3("Select Variables for Your Model"),
+              #choices = covariates,
+              choiceNames=covariate.labels,
+              choiceValues=covariates,
+              selected= c("VacantLots", "NoninstitutionalizedPopulation"))
+
+```
+
+Row
+-----------------------------------------------------------------------
+
+### **Regression** 
+
+```{r, echo=FALSE, results='asis'}
+
+get_dv <- reactive({ input$dv })
+  
+get_covariates <-  reactive({ input$covariates })
+
+renderUI({
+  
+dv <- get_dv()
+covariates <- get_covariates() 
+
+formula.text <- paste0( dv, " ~ ", paste( covariates, collapse=" + " ) )
+
+fo <- as.formula( formula.text )
+
+m <- lm( fo, data=d )
+
+
+HTML( 
+  
+  c("",
+  "",
+  stargazer( m, type="html"),
+  "",
+  ""
+  )
+  
+  )
+
+})
+
+
+```
+
+### **Correlation Plots**
+
+```{r , echo=FALSE, results='asis'}
+panel.cor <- function(x, y, digits=2, prefix="", cex.cor)
+{
+    usr <- par("usr"); on.exit(par(usr))
+    par(usr = c(0, 1, 0, 1))
+    r <- abs(cor(x, y,use = "complete.obs") )
+    txt <- format(c(r, 0.123456789), digits=digits)[1]
+    txt <- paste(prefix, txt, sep="")
+    if(missing(cex.cor)) cex <- 0.5/strwidth(txt)
+    
+    test <- cor.test(x,y)
+    Signif <- symnum(test$p.value, corr = FALSE, na = FALSE,
+                  cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1),
+                  symbols = c("***", "**", "*", ".", " "))
+    
+    text(0.5, 0.5, txt, cex = 3)
+    text(.7, .8, Signif, cex=cex,  col="deeppink4")
+    
+}
+
+panel.smooth <- function (x, y, col = par("col"), bg = NA, pch = par("pch"), 
+    cex = 0.5, col.smooth = "darkcyan", span = 2/3, iter = 3, ...) 
+{
+    points(x, y, pch = 20, col = "darkblue", bg = bg, cex = cex)
+    ok <- is.finite(x) & is.finite(y)
+    if (any(ok)) 
+        lines(stats::lowess(x[ok], y[ok], f = span, iter = iter), 
+            col = col.smooth, lwd=2, ...)
+}
+
+jplot <- function( x1, x2, lab1="", lab2="", draw.line=T, ... )
+{
+
+    plot( x1, x2,
+          pch=19, 
+          col=gray(0.6, alpha = 0.2), 
+          cex=0.6,  
+          bty = "n",
+          xlab=lab1, 
+          ylab=lab2, cex.lab=4,
+        ... )
+
+    if( draw.line==T ){ 
+        ok <- is.finite(x1) & is.finite(x2)
+        lines( lowess(x2[ok]~x1[ok]), col="darkslategrey", lwd=3 ) }
+
+}
+```
+
+
+```{r , echo=FALSE }
+
+renderPlot({
+  pairs(d[input$covariates])
+})
+
+```
+
