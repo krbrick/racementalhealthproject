@@ -1061,7 +1061,7 @@ ct.vars.census <- combine.ct %>%
 #suicide data from CDC WONDER website
 #https://wonder.cdc.gov/controller/datarequest/D76;jsessionid=DE0872E22975C00841A274707E46
 suicide.data <- Underlying_Cause_of_Death_1999_2020_2_
-sdat1 <- Underlying_Cause_of_Death_1999_2020_3_
+
 sdat <- suicide.data
 
 #Creating true/false columns for race
@@ -1082,32 +1082,24 @@ sdat <- sdat %>%
   rename("CountyCode" = `County Code`,
          CrudeRate = 'Crude Rate')
 
-#sdat1 <- sdat1 %>%  
-#  rename("CountyCode" = `County Code`,
-#         CrudeRate25 = 'Crude Rate',
-#         Death25 = Deaths,
-#         Population25 = Population)
-
 sdat <- sdat %>% 
     mutate("CountyCode" = as.character(sdat$`CountyCode`),
            CrudeRate = round(Deaths/Population*100000,2))
-library(dplyr)
-#sdat1 <- sdat1 %>% 
-   # mutate("CountyCode" = as.character(sdat1$`CountyCode`),
-  #CrudeRate25 = round(Death25/Population25*100000,2))
-#merge.d <- inner_join(d,sdat1)
+
 #Remove Notes column
 #mutate 09015 county code to 9015
 
-merge.vt.25 <- left_join(merge1, vt.vars.census)
+merge1 <- full_join(all.pops,sdat)
 
-merge.pa.25 <- left_join(merge1, pa.vars.census)
+merge.vt <- left_join(merge1, vt.vars.census)
 
-merge.ny.25 <- left_join(merge1, ny.vars.census)
+merge.pa <- left_join(merge1, pa.vars.census)
 
-merge.nh.25 <- left_join(merge1, nh.vars.census)
+merge.ny <- left_join(merge1, ny.vars.census)
 
-merge.ma.25 <- left_join(merge1, ma.vars.census)
+merge.nh <- left_join(merge1, nh.vars.census)
+
+merge.ma <- left_join(merge1, ma.vars.census)
 
 #join fix for ct
 
@@ -1170,7 +1162,6 @@ character.d$Longitude <- as.numeric(as.character(character.d$Longitude))
 
 
 new.d1 <- inner_join (character.d, d)
-
 
 ```
 
